@@ -2,7 +2,7 @@
 // @name         PCRU Auto Login
 // @namespace    http://tampermonkey.net/
 // @version      10.0
-// @description  Auto login with GUI Settings
+// @description  Auto login with GUI Settings test
 // @author       Banjong Surin
 // @match        *://login.pcru.ac.th:1003/*
 // @grant        GM_setValue
