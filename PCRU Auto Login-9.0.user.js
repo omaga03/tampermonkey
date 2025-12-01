@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      9.0
 // @description  Auto login with GUI Settings
-// @author       Banjong Surin
+// @author       Banchong Surin
 // @match        *://login.pcru.ac.th:1003/*
 // @grant        GM_setValue
 // @grant        GM_getValue
