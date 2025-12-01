@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         PCRU Auto Login
 // @namespace    http://tampermonkey.net/
-// @version      10.1
-// @description  Auto login with GUI Settings test
+// @version      9.0
+// @description  Auto login with GUI Settings
 // @author       Banjong Surin
 // @match        *://login.pcru.ac.th:1003/*
 // @grant        GM_setValue
