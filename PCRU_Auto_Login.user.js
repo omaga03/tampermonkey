@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PCRU Auto Auth
 // @namespace    http://tampermonkey.net/
-// @version      14.1
+// @version      14.2
 // @description  Automatic Internet Authentication for PCRU
 // @author       Banjong Surin
 // @include      *://*.pcru.ac.th*
