@@ -1,10 +1,10 @@
 // ==UserScript==
-// @name         PCRU Auto Login
+// @name         PCRU Auto Auth
 // @namespace    http://tampermonkey.net/
-// @version      9.0
-// @description  Auto login with GUI Settings
+// @version      14.1
+// @description  Automatic Internet Authentication for PCRU
 // @author       Banjong Surin
-// @match        *://login.pcru.ac.th:1003/*
+// @include      *://*.pcru.ac.th*
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
@@ -16,45 +16,59 @@
 (function() {
     'use strict';
 
-    // === ตั้งค่าพื้นฐาน ===
-    var delayTime = 5; // เวลานับถอยหลัง (วินาที)
+    // === 1. Stealth Check (ตรวจสอบเป้าหมาย) ===
+    var currentHost = window.location.hostname;
+    if (currentHost.indexOf("login") === -1) {
+        return;
+    }
 
-    // ดึงค่า User/Pass จากระบบบันทึกของ Tampermonkey
-    var storedUser = GM_getValue("pcru_username", "");
-    var storedPass = GM_getValue("pcru_password", "");
-
-    // เพิ่มเมนูใน Tampermonkey เพื่อให้กด Reset ได้
+    // === [ย้ายมาตรงนี้] เมนูตั้งค่า (ให้ใช้งานได้ทุกหน้า) ===
     GM_registerMenuCommand("⚙️ เปลี่ยนรหัสผ่าน / ตั้งค่าใหม่", function() {
-        if(confirm("ต้องการลบข้อมูล User/Pass เดิมและตั้งค่าใหม่ใช่หรือไม่?")) {
+        if(confirm("ต้องการลบข้อมูลเดิมและตั้งค่าใหม่ใช่หรือไม่?")) {
             GM_deleteValue("pcru_username");
             GM_deleteValue("pcru_password");
-            window.location.reload();
+
+            // ถ้าอยู่หน้า keepalive ให้เด้งกลับไปหน้า login เพื่อตั้งค่าใหม่
+            if (window.location.href.indexOf("keepalive") > -1) {
+                window.location.href = "https://login.pcru.ac.th:1003/";
+            } else {
+                window.location.reload();
+            }
         }
     });
 
-    // === ส่วนตรวจสอบหน้า Keepalive ===
+    // === 2. ตรวจสอบหน้า Keepalive ===
+    // ถ้าเป็นหน้า keepalive ให้หยุดโหลด UI ส่วนอื่น (หน้าจะโล่งๆ เหมือนเดิม)
     if (window.location.href.indexOf("keepalive") > -1) {
         return;
     }
 
-    // === สร้าง Style สำหรับ UI ===
+    // === ตั้งค่าตัวแปร ===
+    var delayTime = 10;
+    var maxRetries = 10;
+    var retryCount = 0;
+
+    var storedUser = GM_getValue("pcru_username", "");
+    var storedPass = GM_getValue("pcru_password", "");
+
+    // === UI Style ===
     function addStyles() {
         var style = document.createElement('style');
         style.innerHTML = `
             .pcru-box {
                 position: fixed; top: 20px; right: 20px; z-index: 99999;
-                padding: 20px; background-color: rgba(0, 0, 0, 0.9);
-                color: white; border-radius: 10px; border: 2px solid #00ff00;
-                font-family: sans-serif; box-shadow: 0 0 15px rgba(0,0,0,0.8);
+                padding: 15px; background-color: rgba(0, 0, 0, 0.9);
+                color: white; border-radius: 8px; border: 2px solid #00ff00;
+                font-family: sans-serif; box-shadow: 0 0 10px rgba(0,0,0,0.8);
                 font-size: 16px; max-width: 300px; text-align: center;
             }
             .pcru-input {
-                display: block; width: 90%; margin: 10px auto; padding: 8px;
-                border-radius: 5px; border: 1px solid #ccc; color: black;
+                display: block; width: 90%; margin: 8px auto; padding: 5px;
+                border-radius: 4px; border: 1px solid #ccc; color: black;
             }
             .pcru-btn {
-                background: #00ff00; color: black; border: none; padding: 10px 20px;
-                border-radius: 5px; cursor: pointer; font-weight: bold; width: 100%;
+                background: #00ff00; color: black; border: none; padding: 8px;
+                border-radius: 4px; cursor: pointer; font-weight: bold; width: 100%; margin-top: 5px;
             }
             .pcru-btn:hover { background: #00cc00; }
         `;
@@ -62,52 +76,43 @@
     }
     addStyles();
 
-    // === ฟังก์ชันแสดงหน้าต่างตั้งค่า (ถ้ายังไม่มี User/Pass) ===
+    // === Setup UI ===
     function showSetupUI() {
+        var hasLoginForm = document.querySelector("input[name='username']");
+        if (!hasLoginForm) return;
+
         var setupBox = document.createElement('div');
         setupBox.className = 'pcru-box';
-        setupBox.style.borderColor = '#ffcc00'; // สีเหลืองสำหรับการตั้งค่า
-
+        setupBox.style.borderColor = '#ffcc00';
         setupBox.innerHTML = `
-            <h3 style="margin:0 0 10px 0; color:#ffcc00;">⚙️ ตั้งค่า Auto Login</h3>
-            <div style="font-size:14px; margin-bottom:10px;">กรุณากรอกรหัสอินเทอร์เน็ตของท่าน (บันทึกครั้งเดียว)</div>
-            <input type="text" id="pcru_set_user" class="pcru-input" placeholder="Username (เช่น banchong)">
+            <h3 style="margin:0 0 5px 0; color:#ffcc00;">⚙️ ตั้งค่า (Auth Setup)</h3>
+            <div style="font-size:13px; margin-bottom:5px;">กรอกรหัสอินเทอร์เน็ต (ครั้งเดียว)</div>
+            <input type="text" id="pcru_set_user" class="pcru-input" placeholder="Username">
             <input type="password" id="pcru_set_pass" class="pcru-input" placeholder="Password">
-            <button id="pcru_save_btn" class="pcru-btn">บันทึกและเริ่มใช้งาน</button>
+            <button id="pcru_save_btn" class="pcru-btn">บันทึก</button>
         `;
         document.body.appendChild(setupBox);
 
-        // ดักจับการกดปุ่มบันทึก
         document.getElementById('pcru_save_btn').addEventListener('click', function() {
             var u = document.getElementById('pcru_set_user').value.trim();
             var p = document.getElementById('pcru_set_pass').value.trim();
-
             if(u && p) {
                 GM_setValue("pcru_username", u);
                 GM_setValue("pcru_password", p);
-                alert("บันทึกเรียบร้อย! ระบบจะรีเฟรชเพื่อเริ่มทำงาน");
                 window.location.reload();
-            } else {
-                alert("กรุณากรอกข้อมูลให้ครบถ้วน");
-            }
+            } else { alert("กรุณากรอกข้อมูลให้ครบ"); }
         });
     }
 
-    // === ถ้ายังไม่มีข้อมูล ให้แสดงหน้า Setup และจบการทำงาน ===
     if (!storedUser || !storedPass) {
-        // รอหน้าเว็บโหลดสักนิดค่อยแสดงฟอร์ม
         setTimeout(showSetupUI, 1000);
         return;
     }
 
-    // =========================================================
-    // === ด้านล่างนี้คือ Logic เดิม (ทำงานเมื่อมี User/Pass แล้ว) ===
-    // =========================================================
-
-    // สร้างกล่องแสดงสถานะ
+    // === Status Box ===
     var statusBox = document.createElement('div');
     statusBox.className = 'pcru-box';
-    statusBox.innerHTML = '⏳ PCRU Script: เริ่มทำงาน...';
+    statusBox.innerHTML = '⏳ PCRU Auth: เริ่มตรวจสอบ...';
 
     var appendBoxInterval = setInterval(function() {
         if(document.body) {
@@ -117,9 +122,11 @@
     }, 100);
 
     function updateStatus(msg, color) {
-        statusBox.innerHTML = msg;
-        statusBox.style.color = color || '#ffffff';
-        statusBox.style.borderColor = color || '#ffffff';
+        if(statusBox) {
+            statusBox.innerHTML = msg;
+            statusBox.style.color = color || '#ffffff';
+            statusBox.style.borderColor = color || '#ffffff';
+        }
     }
 
     function startCountdown(seconds, message, color, onComplete) {
@@ -135,17 +142,17 @@
         }, 1000);
     }
 
-    // 1. กรณีอยู่หน้า Logout -> Auto F5
+    // === Logic หน้า Logout ===
     if (window.location.href.indexOf("logout") > -1) {
-        startCountdown(delayTime, "👋 ออกจากระบบแล้ว<br>จะรีเฟรช (F5) ในอีก", "orange", function() {
-            updateStatus("🔄 กำลังรีเฟรชหน้าจอ...", "orange");
+        startCountdown(3, "👋 ออกจากระบบแล้ว<br>รีเฟรชใน", "orange", function() {
             window.location.reload();
         });
         return;
     }
 
-    // 2. กรณีอยู่หน้า Login -> Auto Login
+    // === Logic หน้าเข้าสู่ระบบ ===
     var checkExist = setInterval(function() {
+
         var userInput = document.querySelector("input[name='username']");
         var passInput = document.querySelector("input[name='password']");
         var loginBtn = document.querySelector("input[type='submit']");
@@ -153,19 +160,32 @@
         if (userInput && passInput && loginBtn) {
             clearInterval(checkExist);
 
-            userInput.value = storedUser; // ใช้ค่าที่ดึงมาจาก Storage
-            passInput.value = storedPass; // ใช้ค่าที่ดึงมาจาก Storage
+            userInput.value = storedUser;
+            passInput.value = storedPass;
 
             userInput.dispatchEvent(new Event('input', { bubbles: true }));
             userInput.dispatchEvent(new Event('change', { bubbles: true }));
-            passInput.dispatchEvent(new Event('input', { bubbles: true }));
             passInput.dispatchEvent(new Event('change', { bubbles: true }));
 
-            startCountdown(delayTime, "📝 พบหน้า Login! ("+storedUser+")<br>เข้าสู่ระบบในอีก", "#00ffff", function() {
-                updateStatus("🚀 กำลังกดปุ่มเข้าสู่ระบบ...", "#00ff00");
+            startCountdown(delayTime, "📝 พบช่องกรอกข้อมูล!<br>ดำเนินการใน", "#00ffff", function() {
+                updateStatus("🚀 กำลังยืนยันตัวตน...", "#00ff00");
                 loginBtn.click();
             });
+
+        } else {
+            retryCount++;
+
+            if(document.body && statusBox) {
+                 updateStatus("🔍 กำลังค้นหา... (" + retryCount + "/" + maxRetries + ")", "yellow");
+            }
+
+            if (retryCount >= maxRetries) {
+                clearInterval(checkExist);
+                if(statusBox) {
+                    statusBox.remove();
+                }
+            }
         }
-    }, 500);
+    }, 1000);
 
 })();
