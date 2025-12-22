@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PCRU Auto Auth
 // @namespace    http://tampermonkey.net/
-// @version      14.2
+// @version      14.3
 // @description  Automatic Internet Authentication for PCRU
 // @author       Banjong Surin
 // @include      *://*.pcru.ac.th*
@@ -13,8 +13,26 @@
 // @downloadURL  https://raw.githubusercontent.com/omaga03/tampermonkey/main/PCRU_Auto_Login.user.js
 // ==/UserScript==
 
-(function() {
+(function () {
     'use strict';
+
+    // === 0. Scheduled Logout (ทำงานทุกหน้า) ===
+    setInterval(function () {
+        var now = new Date();
+        var h = now.getHours();
+        var m = now.getMinutes();
+        var s = now.getSeconds();
+
+        if ((h === 8 || h === 17) && m === 0 && s < 5) {
+            var logoutLinks = document.querySelectorAll("a.btn.btn-danger");
+            for (var i = 0; i < logoutLinks.length; i++) {
+                if (logoutLinks[i].innerText.indexOf("ออกจากระบบ") > -1 || logoutLinks[i].href.indexOf("logout") > -1) {
+                    logoutLinks[i].click();
+                    break;
+                }
+            }
+        }
+    }, 1000);
 
     // === 1. Stealth Check (ตรวจสอบเป้าหมาย) ===
     var currentHost = window.location.hostname;
@@ -23,8 +41,8 @@
     }
 
     // === [ย้ายมาตรงนี้] เมนูตั้งค่า (ให้ใช้งานได้ทุกหน้า) ===
-    GM_registerMenuCommand("⚙️ เปลี่ยนรหัสผ่าน / ตั้งค่าใหม่", function() {
-        if(confirm("ต้องการลบข้อมูลเดิมและตั้งค่าใหม่ใช่หรือไม่?")) {
+    GM_registerMenuCommand("⚙️ เปลี่ยนรหัสผ่าน / ตั้งค่าใหม่", function () {
+        if (confirm("ต้องการลบข้อมูลเดิมและตั้งค่าใหม่ใช่หรือไม่?")) {
             GM_deleteValue("pcru_username");
             GM_deleteValue("pcru_password");
 
@@ -36,6 +54,8 @@
             }
         }
     });
+
+
 
     // === 2. ตรวจสอบหน้า Keepalive ===
     // ถ้าเป็นหน้า keepalive ให้หยุดโหลด UI ส่วนอื่น (หน้าจะโล่งๆ เหมือนเดิม)
@@ -93,10 +113,10 @@
         `;
         document.body.appendChild(setupBox);
 
-        document.getElementById('pcru_save_btn').addEventListener('click', function() {
+        document.getElementById('pcru_save_btn').addEventListener('click', function () {
             var u = document.getElementById('pcru_set_user').value.trim();
             var p = document.getElementById('pcru_set_pass').value.trim();
-            if(u && p) {
+            if (u && p) {
                 GM_setValue("pcru_username", u);
                 GM_setValue("pcru_password", p);
                 window.location.reload();
@@ -114,15 +134,15 @@
     statusBox.className = 'pcru-box';
     statusBox.innerHTML = '⏳ PCRU Auth: เริ่มตรวจสอบ...';
 
-    var appendBoxInterval = setInterval(function() {
-        if(document.body) {
+    var appendBoxInterval = setInterval(function () {
+        if (document.body) {
             document.body.appendChild(statusBox);
             clearInterval(appendBoxInterval);
         }
     }, 100);
 
     function updateStatus(msg, color) {
-        if(statusBox) {
+        if (statusBox) {
             statusBox.innerHTML = msg;
             statusBox.style.color = color || '#ffffff';
             statusBox.style.borderColor = color || '#ffffff';
@@ -132,7 +152,7 @@
     function startCountdown(seconds, message, color, onComplete) {
         var counter = seconds;
         updateStatus(message + " " + counter + " วินาที...", color);
-        var interval = setInterval(function() {
+        var interval = setInterval(function () {
             counter--;
             updateStatus(message + " " + counter + " วินาที...", color);
             if (counter <= 0) {
@@ -144,14 +164,16 @@
 
     // === Logic หน้า Logout ===
     if (window.location.href.indexOf("logout") > -1) {
-        startCountdown(3, "👋 ออกจากระบบแล้ว<br>รีเฟรชใน", "orange", function() {
+        startCountdown(3, "👋 ออกจากระบบแล้ว<br>รีเฟรชใน", "orange", function () {
             window.location.reload();
         });
         return;
     }
 
+
+
     // === Logic หน้าเข้าสู่ระบบ ===
-    var checkExist = setInterval(function() {
+    var checkExist = setInterval(function () {
 
         var userInput = document.querySelector("input[name='username']");
         var passInput = document.querySelector("input[name='password']");
@@ -167,7 +189,7 @@
             userInput.dispatchEvent(new Event('change', { bubbles: true }));
             passInput.dispatchEvent(new Event('change', { bubbles: true }));
 
-            startCountdown(delayTime, "📝 พบช่องกรอกข้อมูล!<br>ดำเนินการใน", "#00ffff", function() {
+            startCountdown(delayTime, "📝 พบช่องกรอกข้อมูล!<br>ดำเนินการใน", "#00ffff", function () {
                 updateStatus("🚀 กำลังยืนยันตัวตน...", "#00ff00");
                 loginBtn.click();
             });
@@ -175,13 +197,13 @@
         } else {
             retryCount++;
 
-            if(document.body && statusBox) {
-                 updateStatus("🔍 กำลังค้นหา... (" + retryCount + "/" + maxRetries + ")", "yellow");
+            if (document.body && statusBox) {
+                updateStatus("🔍 กำลังค้นหา... (" + retryCount + "/" + maxRetries + ")", "yellow");
             }
 
             if (retryCount >= maxRetries) {
                 clearInterval(checkExist);
-                if(statusBox) {
+                if (statusBox) {
                     statusBox.remove();
                 }
             }
