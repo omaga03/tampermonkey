@@ -23,7 +23,7 @@
         var m = now.getMinutes();
         var s = now.getSeconds();
 
-        if ((h === 8 || h === 17) && m === 0 && s < 5) {
+        if ((h === 8 || h === 15) && m === 0 && s < 5) {
             var logoutLinks = document.querySelectorAll("a.btn.btn-danger");
             for (var i = 0; i < logoutLinks.length; i++) {
                 if (logoutLinks[i].innerText.indexOf("ออกจากระบบ") > -1 || logoutLinks[i].href.indexOf("logout") > -1) {
