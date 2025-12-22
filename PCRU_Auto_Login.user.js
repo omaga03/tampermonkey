@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         PCRU Auto Auth
 // @namespace    http://tampermonkey.net/
-// @version      14.3
+// @version      14.4
 // @description  Automatic Internet Authentication for PCRU
 // @author       Banjong Surin
 // @include      *://*.pcru.ac.th*
@@ -17,18 +17,30 @@
     'use strict';
 
     // === 0. Scheduled Logout (ทำงานทุกหน้า) ===
+    // === 0. Scheduled Logout (ทำงานเฉพาะหน้า keepalive) ===
+    var isLogoutPending = false; // ป้องกันการกดซ้ำ
     setInterval(function () {
+        // ตรวจสอบว่าเป็นหน้า keepalive หรือไม่
+        if (window.location.href.indexOf("keepalive") === -1) {
+            return;
+        }
+
         var now = new Date();
         var h = now.getHours();
         var m = now.getMinutes();
         var s = now.getSeconds();
 
         if ((h === 8 || h === 15) && m === 0 && s < 5) {
-            var logoutLinks = document.querySelectorAll("a.btn.btn-danger");
-            for (var i = 0; i < logoutLinks.length; i++) {
-                if (logoutLinks[i].innerText.indexOf("ออกจากระบบ") > -1 || logoutLinks[i].href.indexOf("logout") > -1) {
-                    logoutLinks[i].click();
-                    break;
+            if (!isLogoutPending) {
+                var logoutLinks = document.querySelectorAll("a.btn.btn-danger");
+                for (var i = 0; i < logoutLinks.length; i++) {
+                    if (logoutLinks[i].innerText.indexOf("ออกจากระบบ") > -1 || logoutLinks[i].href.indexOf("logout") > -1) {
+                        isLogoutPending = true; // ล็อคไว้ไม่ให้กดซ้ำ
+                        logoutLinks[i].click();
+                        // รีเซ็ต flag หลังจาก 10 วินาที (เผื่อกรณีคลิกไม่ติด)
+                        setTimeout(function () { isLogoutPending = false; }, 10000);
+                        break;
+                    }
                 }
             }
         }
@@ -41,6 +53,7 @@
     }
 
     // === [ย้ายมาตรงนี้] เมนูตั้งค่า (ให้ใช้งานได้ทุกหน้า) ===
+    // === [ย้ายมาตรงนี้] เมนูตั้งค่า (ให้ใช้งานได้ทุกหน้า) ===
     GM_registerMenuCommand("⚙️ เปลี่ยนรหัสผ่าน / ตั้งค่าใหม่", function () {
         if (confirm("ต้องการลบข้อมูลเดิมและตั้งค่าใหม่ใช่หรือไม่?")) {
             GM_deleteValue("pcru_username");
@@ -52,6 +65,21 @@
             } else {
                 window.location.reload();
             }
+        }
+    });
+
+    GM_registerMenuCommand("🚪 ออกจากระบบทันที", function () {
+        var logoutLinks = document.querySelectorAll("a.btn.btn-danger");
+        var found = false;
+        for (var i = 0; i < logoutLinks.length; i++) {
+            if (logoutLinks[i].innerText.indexOf("ออกจากระบบ") > -1 || logoutLinks[i].href.indexOf("logout") > -1) {
+                logoutLinks[i].click();
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            alert("ไม่พบปุ่มออกจากระบบในหน้านี้");
         }
     });
 
@@ -68,8 +96,16 @@
     var maxRetries = 10;
     var retryCount = 0;
 
-    var storedUser = GM_getValue("pcru_username", "");
-    var storedPass = GM_getValue("pcru_password", "");
+    // === Helper: Encryption ===
+    function encode(str) {
+        try { return btoa(str); } catch (e) { return str; }
+    }
+    function decode(str) {
+        try { return atob(str); } catch (e) { return str; }
+    }
+
+    var storedUser = decode(GM_getValue("pcru_username", ""));
+    var storedPass = decode(GM_getValue("pcru_password", ""));
 
     // === UI Style ===
     function addStyles() {
@@ -117,8 +153,8 @@
             var u = document.getElementById('pcru_set_user').value.trim();
             var p = document.getElementById('pcru_set_pass').value.trim();
             if (u && p) {
-                GM_setValue("pcru_username", u);
-                GM_setValue("pcru_password", p);
+                GM_setValue("pcru_username", encode(u));
+                GM_setValue("pcru_password", encode(p));
                 window.location.reload();
             } else { alert("กรุณากรอกข้อมูลให้ครบ"); }
         });
