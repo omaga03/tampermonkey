@@ -1,3 +1,4 @@
+//https://scholar.google.com/citations?view_op=search_authors&hl=th&authuser=2&mauthors=pcru.ac.th&before_author=xBjY_hoAAAAJ&astart=40
 // ==UserScript==
 // @name         Google Scholar Scraper V.15.1 (UI Fix)
 // @namespace    http://tampermonkey.net/
