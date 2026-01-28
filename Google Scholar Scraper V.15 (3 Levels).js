@@ -1,8 +1,8 @@
 // ==UserScript==
-// @name         Google Scholar Scraper V.15 (3 Levels: Profile/Basic/Deep)
+// @name         Google Scholar Scraper V.15.1 (UI Fix)
 // @namespace    http://tampermonkey.net/
-// @version      15.0
-// @description  เลือกระดับได้ 3 แบบ (รายชื่อ/บทความ/เจาะลึก) -> Dashboard -> CSV
+// @version      15.1
+// @description  UI Fix (ปุ่มกว้างขึ้น) -> เลือกได้ 3 ระดับ -> CSV
 // @author       Gemini
 // @match        https://scholar.google.com/citations?*
 // @grant        GM_xmlhttpRequest
@@ -73,7 +73,10 @@
         btn.style.fontSize = '14px';
         btn.style.boxShadow = '0 3px 6px rgba(0,0,0,0.3)';
         btn.style.textAlign = 'right';
-        btn.style.width = '220px';
+        
+        // *** แก้ไขจุดนี้: เพิ่มความกว้างและห้ามตัดบรรทัด ***
+        btn.style.width = '280px'; 
+        btn.style.whiteSpace = 'nowrap';
     }
 
     // --- Dashboard UI ---
@@ -155,7 +158,6 @@
         while (isPaused) {
             await new Promise(r => setTimeout(r, 1000));
         }
-        // Level 1 แทบไม่ต้องรอ
         if (currentMode === 'profile') {
              await new Promise(r => setTimeout(r, 200)); 
              return;
@@ -200,14 +202,10 @@
 
             let detailedArticles = [];
 
-            // --- แยกการทำงานตามโหมด ---
-            
             if (mode === 'profile') {
-                // Level 1: เก็บแค่ชื่อและ URL แล้วไปคนต่อไปเลย
                 updateDashboardUI(authorName, null, 0, 0);
                 await smartSleep();
             } else {
-                // Level 2 & 3: ต้องเข้าไปดึงบทความ
                 const articlesList = await fetchAllArticlesList(userId);
                 
                 if (isStopped) break;
@@ -222,16 +220,12 @@
                     let isMatch = null;
 
                     if (mode === 'deep') {
-                        // Level 3: Deep Dive
                         await smartSleep(); 
                         authorsInArticle = await fetchArticleDeepDetail(art.url);
                         isMatch = checkNameMatch(authorName, authorsInArticle);
                         
                         if (isMatch) globalStats.totalMatches++;
                         else globalStats.totalMismatches++;
-                    } else {
-                        // Level 2: Basic (ไว)
-                        // ไม่ต้อง sleep นาน
                     }
 
                     detailedArticles.push({
@@ -355,7 +349,6 @@
             boxShadow: '0 0 25px rgba(0,0,0,0.5)', borderRadius: '8px', overflow: 'hidden'
         });
 
-        // Header Content
         let statsHTML = '';
         if (mode === 'deep') {
             statsHTML = `
@@ -366,7 +359,7 @@
         } else if (mode === 'basic') {
             statsHTML = `โหมดบทความ (Basic): ดึงชื่อเรื่องและ URL เท่านั้น`;
         } else {
-            statsHTML = `โหมดรายชื่อ (Profile): ดึงเฉพาะรายชื่อนักวิจัยและ URL โปรไฟล์`;
+            statsHTML = `โหมดรายชื่อ (Profile): ดึงข้อมูลนักวิจัย ${masterData.length} ท่าน`;
         }
 
         const header = document.createElement('div');
@@ -374,7 +367,7 @@
         header.style.backgroundColor = '#f1f3f4';
         header.style.borderBottom = '1px solid #ddd';
         header.innerHTML = `
-            <h2 style="margin:0 0 10px 0;">สรุปผลการดึงข้อมูล (Level ${mode === 'profile' ? '1' : mode === 'basic' ? '2' : '3'})</h2>
+            <h2 style="margin:0 0 10px 0;">สรุปผลการดึงข้อมูล (${mode === 'profile' ? 'Profile' : mode === 'basic' ? 'Basic' : 'Deep'})</h2>
             <div>${statsHTML}</div>
         `;
 
@@ -385,7 +378,6 @@
         listContainer.style.backgroundColor = '#fafafa';
 
         masterData.forEach((person, pIdx) => {
-            
             let articleCountText = mode === 'profile' ? '' : `(${person.articles.length} เรื่อง)`;
             let personHeaderHTML = `👤 ${pIdx+1}. ${person.authorName} ${articleCountText}`;
             
@@ -410,7 +402,6 @@
             personHeader.innerHTML = personHeaderHTML;
             listContainer.appendChild(personHeader);
 
-            // ถ้าเป็นโหมด Profile ไม่ต้องลูปบทความ
             if (mode !== 'profile') {
                 person.articles.forEach((item, idx) => {
                     const row = document.createElement('div');
